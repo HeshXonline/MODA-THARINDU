@@ -1,9 +1,13 @@
 // Configuration
 const API_URL = window.location.origin + '/api/chat';
+const PRO_PASSWORD = 'ModaProAccess2025'; // Pro password
+const FREE_MESSAGE_LIMIT = 3; // Number of free messages
 
 // State
 let conversationHistory = [];
 let isProcessing = false;
+let messageCount = 0; // Track number of messages sent
+let isProUser = false; // Pro status
 
 // DOM Elements
 const chatContainer = document.getElementById('chatContainer');
@@ -28,6 +32,7 @@ marked.setOptions({
 // Initialize
 document.addEventListener('DOMContentLoaded', () => {
     setupEventListeners();
+    loadProStatus();
     userInput.focus();
 });
 
@@ -64,12 +69,48 @@ function setupEventListeners() {
             userInput.focus();
         });
     });
+
+    // Pro modal event listeners
+    const proModal = document.getElementById('proModal');
+    const proPasswordInput = document.getElementById('proPasswordInput');
+    const proSubmitBtn = document.getElementById('proSubmitBtn');
+    const proCancelBtn = document.getElementById('proCancelBtn');
+    
+    if (proSubmitBtn) {
+        proSubmitBtn.addEventListener('click', handleProSubmit);
+    }
+    
+    if (proCancelBtn) {
+        proCancelBtn.addEventListener('click', hideProModal);
+    }
+    
+    if (proPasswordInput) {
+        proPasswordInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                handleProSubmit();
+            }
+        });
+    }
+    
+    // Close modal on Escape
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && proModal && proModal.style.display === 'flex') {
+            hideProModal();
+        }
+    });
 }
 
 // Handle sending message
 async function handleSendMessage() {
     const message = userInput.value.trim();
     if (!message || isProcessing) return;
+
+    // Check if user exceeded free message limit and is not Pro
+    if (messageCount >= FREE_MESSAGE_LIMIT && !isProUser) {
+        showProModal();
+        return;
+    }
 
     // Clear input
     userInput.value = '';
@@ -159,6 +200,16 @@ async function handleSendMessage() {
             role: 'assistant',
             content: assistantResponse
         });
+
+        // Increment message count (only count user messages)
+        messageCount++;
+        saveMessageCount();
+        
+        // Show remaining messages if not Pro
+        if (!isProUser && messageCount < FREE_MESSAGE_LIMIT) {
+            const remaining = FREE_MESSAGE_LIMIT - messageCount;
+            showRemainingMessages(remaining);
+        }
 
         // Add copy button
         addCopyButton(assistantMessage);
@@ -359,4 +410,139 @@ function clearChat() {
 // Scroll to bottom
 function scrollToBottom() {
     chatContainer.scrollTop = chatContainer.scrollHeight;
+}
+
+// Pro Features - Message Limit & Password
+
+function loadProStatus() {
+    // Load Pro status from localStorage
+    const storedProStatus = localStorage.getItem('moda_pro_status');
+    const storedMessageCount = localStorage.getItem('moda_message_count');
+    
+    if (storedProStatus === 'active') {
+        isProUser = true;
+    }
+    
+    if (storedMessageCount) {
+        messageCount = parseInt(storedMessageCount) || 0;
+    }
+}
+
+function saveMessageCount() {
+    localStorage.setItem('moda_message_count', messageCount.toString());
+}
+
+function showProModal() {
+    const proModal = document.getElementById('proModal');
+    const proPasswordInput = document.getElementById('proPasswordInput');
+    const proError = document.getElementById('proError');
+    
+    if (proModal) {
+        proModal.style.display = 'flex';
+        if (proPasswordInput) {
+            proPasswordInput.value = '';
+        }
+        if (proError) {
+            proError.style.display = 'none';
+        }
+        setTimeout(() => {
+            if (proPasswordInput) proPasswordInput.focus();
+        }, 100);
+    }
+}
+
+function hideProModal() {
+    const proModal = document.getElementById('proModal');
+    const proPasswordInput = document.getElementById('proPasswordInput');
+    const proError = document.getElementById('proError');
+    
+    if (proModal) {
+        proModal.style.display = 'none';
+    }
+    if (proPasswordInput) {
+        proPasswordInput.value = '';
+    }
+    if (proError) {
+        proError.style.display = 'none';
+    }
+}
+
+function handleProSubmit() {
+    const proPasswordInput = document.getElementById('proPasswordInput');
+    const proError = document.getElementById('proError');
+    const proSubmitBtn = document.getElementById('proSubmitBtn');
+    
+    const password = proPasswordInput ? proPasswordInput.value.trim() : '';
+    
+    if (!password) {
+        if (proError) {
+            proError.textContent = 'Please enter a password';
+            proError.style.display = 'block';
+        }
+        return;
+    }
+    
+    if (password === PRO_PASSWORD) {
+        // Correct password!
+        isProUser = true;
+        localStorage.setItem('moda_pro_status', 'active');
+        hideProModal();
+        showSuccessMessage('🌟 Pro activated! Unlimited messages unlocked!');
+        
+        // Allow user to send their pending message
+        userInput.focus();
+    } else {
+        // Wrong password
+        if (proError) {
+            proError.textContent = 'Incorrect password. Please try again.';
+            proError.style.display = 'block';
+        }
+    }
+}
+
+function showSuccessMessage(message) {
+    const successDiv = document.createElement('div');
+    successDiv.style.cssText = `
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        background: linear-gradient(135deg, #10b981, #059669);
+        color: white;
+        padding: 16px 24px;
+        border-radius: 8px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+        z-index: 1001;
+        font-weight: 500;
+        animation: slideInRight 0.3s ease-out;
+    `;
+    successDiv.textContent = message;
+    document.body.appendChild(successDiv);
+    
+    setTimeout(() => {
+        successDiv.style.animation = 'slideOutRight 0.3s ease-out';
+        setTimeout(() => successDiv.remove(), 300);
+    }, 3000);
+}
+
+function showRemainingMessages(remaining) {
+    const remainingDiv = document.createElement('div');
+    remainingDiv.style.cssText = `
+        position: fixed;
+        bottom: 120px;
+        left: 50%;
+        transform: translateX(-50%);
+        background: rgba(99, 102, 241, 0.9);
+        color: white;
+        padding: 12px 20px;
+        border-radius: 8px;
+        font-size: 14px;
+        z-index: 999;
+        animation: fadeInOut 3s ease-out;
+    `;
+    remainingDiv.textContent = `💬 ${remaining} free message${remaining !== 1 ? 's' : ''} remaining`;
+    document.body.appendChild(remainingDiv);
+    
+    setTimeout(() => {
+        remainingDiv.remove();
+    }, 3000);
 }

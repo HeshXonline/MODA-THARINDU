@@ -1,0 +1,22 @@
+{
+  "name": "hn-ai-chatbot",
+  "version": "1.0.0",
+  "description": "Moda Tharindu AI - AI Chatbot powered by Google Gemini API",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "engines": {
+    "node": ">=14.0.0"
+  },
+  "keywords": ["chatbot", "ai", "gemini", "google"],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "express": "^4.18.2",
+    "dotenv": "^16.3.1",
+    "cors": "^2.8.5",
+    "axios": "^1.6.0"
+  }
+}

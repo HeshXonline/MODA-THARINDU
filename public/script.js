@@ -109,8 +109,13 @@ async function handleSendMessage() {
     // Check if user exceeded free message limit and is not Pro
     if (messageCount >= FREE_MESSAGE_LIMIT && !isProUser) {
         showProModal();
+        // Keep the message in the input so user can send it after activating Pro
         return;
     }
+
+    // Increment message count BEFORE sending
+    messageCount++;
+    saveMessageCount();
 
     // Clear input
     userInput.value = '';
@@ -201,10 +206,6 @@ async function handleSendMessage() {
             content: assistantResponse
         });
 
-        // Increment message count (only count user messages)
-        messageCount++;
-        saveMessageCount();
-        
         // Show remaining messages if not Pro
         if (!isProUser && messageCount < FREE_MESSAGE_LIMIT) {
             const remaining = FREE_MESSAGE_LIMIT - messageCount;

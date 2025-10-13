@@ -80,6 +80,22 @@
         </div>
     </div>
 
+    <!-- Pro Password Modal -->
+    <div id="proModal" class="modal" style="display:none;">
+        <div class="modal-content">
+            <h2 style="margin-top:0; color:#6366f1;">🔒 Upgrade to Pro</h2>
+            <p style="color:#888; margin-bottom:8px;">You've used your <strong>3 free messages</strong></p>
+            <p style="color:#888; margin-bottom:24px;">Enter Pro password to continue unlimited chatting</p>
+            <input type="password" id="proPasswordInput" placeholder="Enter Pro password" 
+                   style="width:100%; padding:12px; border:1px solid #333; background:#1a1a1a; color:#fff; border-radius:6px; font-size:16px; margin-bottom:16px;" />
+            <div id="proError" style="color:#ff4444; margin-bottom:12px; display:none; font-size:14px;"></div>
+            <div style="display:flex; gap:12px; justify-content:flex-end;">
+                <button class="btn-secondary" id="proCancelBtn">Cancel</button>
+                <button class="btn-primary" id="proSubmitBtn">Activate Pro</button>
+            </div>
+        </div>
+    </div>
+
     <script src="app.js"></script>
 </body>
 </html>

@@ -195,6 +195,12 @@ async function handleSendMessage() {
             parts: [{ text: fullResponse }]
         });
 
+        // Detect and add action buttons
+        const actions = detectActions(message, fullResponse);
+        if (actions.length > 0) {
+            addActionButtons(assistantMessage, actions);
+        }
+
         // Show remaining messages if not Pro
         if (!isProUser && messageCount < FREE_MESSAGE_LIMIT) {
             const remaining = FREE_MESSAGE_LIMIT - messageCount;
@@ -517,4 +523,293 @@ function showRemainingMessages(remaining) {
     setTimeout(() => {
         remainingDiv.remove();
     }, 3000);
+}
+
+// ==================== SMART ACTION DETECTION SYSTEM ====================
+
+// Action patterns for different categories
+const actionPatterns = {
+    shopping: {
+        keywords: ['buy', 'purchase', 'shop', 'shopping', 'price', 'cost', 'amazon', 'ebay', 'store', 'product'],
+        items: ['shoes', 'shirt', 'laptop', 'phone', 'book', 'clothes', 'furniture', 'electronics', 'gadget']
+    },
+    youtube: {
+        keywords: ['watch', 'video', 'youtube', 'tutorial', 'how to', 'song', 'music video', 'movie', 'show me'],
+        platforms: ['youtube']
+    },
+    spotify: {
+        keywords: ['listen', 'music', 'song', 'playlist', 'album', 'artist', 'spotify', 'play music'],
+        platforms: ['spotify']
+    },
+    weather: {
+        keywords: ['weather', 'temperature', 'forecast', 'rain', 'sunny', 'climate', 'hot', 'cold'],
+        locations: true
+    },
+    news: {
+        keywords: ['news', 'latest news', 'breaking news', 'headlines', 'current events', 'today news'],
+        topics: true
+    },
+    maps: {
+        keywords: ['map', 'location', 'directions', 'navigate', 'where is', 'how to get to', 'route'],
+        locations: true
+    },
+    search: {
+        keywords: ['search', 'google', 'find', 'look up', 'information about'],
+        general: true
+    }
+};
+
+// Detect actions from user message and AI response
+function detectActions(userMessage, aiResponse) {
+    const combinedText = (userMessage + ' ' + aiResponse).toLowerCase();
+    const actions = [];
+
+    // Shopping detection - Only add one primary shopping button
+    if (actionPatterns.shopping.keywords.some(kw => combinedText.includes(kw))) {
+        const item = extractShoppingItem(combinedText);
+        if (item) {
+            actions.push({
+                type: 'shopping',
+                label: `Shop for ${item}`,
+                url: `https://www.amazon.com/s?k=${encodeURIComponent(item)}`,
+                icon: '🛍️'
+            });
+        }
+    }
+
+    // YouTube detection
+    if (actionPatterns.youtube.keywords.some(kw => combinedText.includes(kw))) {
+        const query = extractVideoQuery(userMessage, combinedText);
+        if (query) {
+            actions.push({
+                type: 'youtube',
+                label: `Watch on YouTube`,
+                url: `https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`,
+                icon: '▶️'
+            });
+        }
+    }
+
+    // Spotify detection
+    if (actionPatterns.spotify.keywords.some(kw => combinedText.includes(kw))) {
+        const query = extractMusicQuery(userMessage, combinedText);
+        if (query) {
+            actions.push({
+                type: 'spotify',
+                label: `Listen on Spotify`,
+                url: `https://open.spotify.com/search/${encodeURIComponent(query)}`,
+                icon: '🎵'
+            });
+        }
+    }
+
+    // Weather detection
+    if (actionPatterns.weather.keywords.some(kw => combinedText.includes(kw))) {
+        const location = extractLocation(userMessage);
+        actions.push({
+            type: 'weather',
+            label: `Check Weather${location ? ': ' + location : ''}`,
+            url: location ? 
+                `https://www.google.com/search?q=weather+${encodeURIComponent(location)}` :
+                `https://www.google.com/search?q=weather`,
+            icon: '🌤️'
+        });
+    }
+
+    // News detection
+    if (actionPatterns.news.keywords.some(kw => combinedText.includes(kw))) {
+        const topic = extractNewsTopic(userMessage);
+        actions.push({
+            type: 'news',
+            label: `Read News${topic ? ': ' + topic : ''}`,
+            url: topic ? 
+                `https://news.google.com/search?q=${encodeURIComponent(topic)}` :
+                `https://news.google.com`,
+            icon: '📰'
+        });
+    }
+
+    // Maps detection
+    if (actionPatterns.maps.keywords.some(kw => combinedText.includes(kw))) {
+        const location = extractLocation(userMessage);
+        if (location) {
+            actions.push({
+                type: 'maps',
+                label: `View on Maps`,
+                url: `https://www.google.com/maps/search/${encodeURIComponent(location)}`,
+                icon: '🗺️'
+            });
+        }
+    }
+
+    // Only show search button if no other actions found
+    if (actions.length === 0 && actionPatterns.search.keywords.some(kw => combinedText.includes(kw))) {
+        const query = extractSearchQuery(userMessage);
+        if (query) {
+            actions.push({
+                type: 'search',
+                label: `Search Google`,
+                url: `https://www.google.com/search?q=${encodeURIComponent(query)}`,
+                icon: '🔍'
+            });
+        }
+    }
+
+    // Limit to maximum 2 action buttons for cleaner UI
+    return actions.slice(0, 2);
+}
+
+// Extract shopping item from text
+function extractShoppingItem(text) {
+    // Try to find specific item mentions
+    for (const item of actionPatterns.shopping.items) {
+        if (text.includes(item)) {
+            return item;
+        }
+    }
+    
+    // Extract from common patterns
+    const patterns = [
+        /(?:buy|purchase|shop for|looking for|need|want)\s+(?:a|an|some)?\s*([a-z\s]{2,30})/i,
+        /([a-z\s]{2,30})\s+(?:on amazon|on ebay|online)/i
+    ];
+    
+    for (const pattern of patterns) {
+        const match = text.match(pattern);
+        if (match && match[1]) {
+            return match[1].trim();
+        }
+    }
+    
+    return null;
+}
+
+// Extract video query
+function extractVideoQuery(originalMessage, text) {
+    const patterns = [
+        /(?:watch|show|find|search for)\s+(?:video|videos|tutorial)?\s*(?:about|on|for)?\s+(.+?)(?:\?|$)/i,
+        /(?:how to)\s+(.+?)(?:\?|$)/i,
+        /(.+?)\s+(?:video|tutorial|on youtube)/i
+    ];
+    
+    for (const pattern of patterns) {
+        const match = originalMessage.match(pattern);
+        if (match && match[1]) {
+            return match[1].trim();
+        }
+    }
+    
+    return null;
+}
+
+// Extract music query
+function extractMusicQuery(originalMessage, text) {
+    const patterns = [
+        /(?:listen to|play|find)\s+(?:song|music|album)?\s*(?:by|from)?\s+(.+?)(?:\?|$)/i,
+        /(?:song|music|album)\s+(.+?)(?:\?|$)/i,
+        /(.+?)\s+(?:on spotify|music)/i
+    ];
+    
+    for (const pattern of patterns) {
+        const match = originalMessage.match(pattern);
+        if (match && match[1]) {
+            return match[1].trim();
+        }
+    }
+    
+    return null;
+}
+
+// Extract location from text
+function extractLocation(text) {
+    const patterns = [
+        /(?:in|at|for|near)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)/,
+        /([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)\s+(?:weather|map|location)/i
+    ];
+    
+    for (const pattern of patterns) {
+        const match = text.match(pattern);
+        if (match && match[1]) {
+            return match[1].trim();
+        }
+    }
+    
+    return null;
+}
+
+// Extract news topic
+function extractNewsTopic(text) {
+    const patterns = [
+        /news\s+(?:about|on|regarding)\s+(.+?)(?:\?|$)/i,
+        /(.+?)\s+news/i
+    ];
+    
+    for (const pattern of patterns) {
+        const match = text.match(pattern);
+        if (match && match[1] && !match[1].match(/latest|breaking|today|current/i)) {
+            return match[1].trim();
+        }
+    }
+    
+    return null;
+}
+
+// Extract general search query
+function extractSearchQuery(text) {
+    const patterns = [
+        /(?:search for|google|find|look up)\s+(.+?)(?:\?|$)/i,
+        /(?:what is|who is|where is|when is|how is)\s+(.+?)(?:\?|$)/i
+    ];
+    
+    for (const pattern of patterns) {
+        const match = text.match(pattern);
+        if (match && match[1]) {
+            return match[1].trim();
+        }
+    }
+    
+    return text.trim();
+}
+
+// Add action buttons to message
+function addActionButtons(messageElement, actions) {
+    if (!actions || actions.length === 0) return;
+
+    // Find the content div inside the message
+    const contentDiv = messageElement.querySelector('.message-content');
+    if (!contentDiv) return;
+
+    const actionsContainer = document.createElement('div');
+    actionsContainer.className = 'action-buttons';
+    
+    // Add a subtle intro text
+    const introSpan = document.createElement('span');
+    introSpan.style.cssText = 'font-size: 12px; color: #9ca3af; margin-right: 8px;';
+    introSpan.textContent = '→';
+    actionsContainer.appendChild(introSpan);
+    
+    actions.forEach(action => {
+        const button = document.createElement('button');
+        button.className = 'action-btn';
+        button.innerHTML = `${action.icon} ${action.label}`;
+        button.onclick = () => {
+            window.open(action.url, '_blank');
+            showActionFeedback('✓ Opened');
+        };
+        actionsContainer.appendChild(button);
+    });
+    
+    contentDiv.appendChild(actionsContainer);
+}
+
+// Show action feedback
+function showActionFeedback(message) {
+    const feedback = document.createElement('div');
+    feedback.className = 'action-feedback';
+    feedback.textContent = message;
+    document.body.appendChild(feedback);
+    
+    setTimeout(() => {
+        feedback.remove();
+    }, 2000);
 }

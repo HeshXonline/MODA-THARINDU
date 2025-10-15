@@ -129,9 +129,11 @@ function setupEventListeners() {
 
 // Model selection functions
 function selectModel(model) {
+    console.log('🔄 Switching to model:', model);
     currentModel = model;
     saveModelPreference(model);
     updateAgentDisplay(model);
+    console.log('✅ Model switched to:', currentModel);
 }
 
 function updateAgentDisplay(model) {
@@ -196,8 +198,11 @@ async function handleSendMessage() {
         let fullResponse = '';
         let assistantMessage;
 
+        console.log('🤖 Using model:', currentModel);
+
         // Route to appropriate AI model
         if (currentModel === 'groq') {
+            console.log('🚀 Calling Groq API...');
             // Call Groq API
             const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
                 method: 'POST',
@@ -255,6 +260,7 @@ async function handleSendMessage() {
                 }
             }
         } else {
+            console.log('🌟 Calling Gemini API...');
             // Call Gemini API
             const apiUrl = `https://generativelanguage.googleapis.com/v1/models/${GEMINI_MODEL}:streamGenerateContent?key=${GEMINI_API_KEY}&alt=sse`;
 

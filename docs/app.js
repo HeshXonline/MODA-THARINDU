@@ -1,9 +1,9 @@
 // Configuration - Using direct AI APIs from browser
 // IMPORTANT: Replace these with your own API keys!
 // For production, these should be moved to environment variables or a config file
-const GEMINI_API_KEY = 'YOUR_GEMINI_API_KEY_HERE';
+const GEMINI_API_KEY = 'AIzaSyC5UqIS8MlrM3cmPV7aGABPXxZArewBd58';
 const GEMINI_MODEL = 'gemini-2.5-flash';
-const GROQ_API_KEY = 'YOUR_GROQ_API_KEY_HERE';
+const GROQ_API_KEY = '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';
 const GROQ_MODEL = 'llama-3.3-70b-versatile';
 const PRO_PASSWORD = 'ModaProAccess2025'; // Pro password
 const FREE_MESSAGE_LIMIT = 3; // Number of free messages

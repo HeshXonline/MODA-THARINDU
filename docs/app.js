@@ -1,6 +1,10 @@
-// Configuration - Using direct Gemini API from browser
-const GEMINI_API_KEY = 'AIzaSyC5UqIS8MlrM3cmPV7aGABPXxZArewBd58';
+// Configuration - Using direct AI APIs from browser
+// IMPORTANT: Replace these with your own API keys!
+// For production, these should be moved to environment variables or a config file
+const GEMINI_API_KEY = 'YOUR_GEMINI_API_KEY_HERE';
 const GEMINI_MODEL = 'gemini-2.5-flash';
+const GROQ_API_KEY = 'YOUR_GROQ_API_KEY_HERE';
+const GROQ_MODEL = 'llama-3.3-70b-versatile';
 const PRO_PASSWORD = 'ModaProAccess2025'; // Pro password
 const FREE_MESSAGE_LIMIT = 3; // Number of free messages
 
@@ -9,12 +13,16 @@ let conversationHistory = [];
 let isProcessing = false;
 let messageCount = 0; // Track number of messages sent
 let isProUser = false; // Pro status
+let currentModel = 'gemini'; // Default model
 
 // DOM Elements
 const chatContainer = document.getElementById('chatContainer');
 const userInput = document.getElementById('userInput');
 const sendBtn = document.getElementById('sendBtn');
 const clearBtn = document.getElementById('clearBtn');
+const agentBtn = document.getElementById('agentBtn');
+const agentDropdown = document.getElementById('agentDropdown');
+const agentName = document.getElementById('agentName');
 
 // Configure marked options
 marked.setOptions({
@@ -34,12 +42,36 @@ marked.setOptions({
 document.addEventListener('DOMContentLoaded', () => {
     setupEventListeners();
     loadProStatus();
+    loadModelPreference();
     userInput.focus();
 });
 
 // Event Listeners
 function setupEventListeners() {
     sendBtn.addEventListener('click', handleSendMessage);
+
+    // Agent selector
+    if (agentBtn) {
+        agentBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            agentDropdown.classList.toggle('active');
+        });
+    }
+
+    // Close dropdown when clicking outside
+    document.addEventListener('click', () => {
+        if (agentDropdown) agentDropdown.classList.remove('active');
+    });
+
+    // Agent option selection
+    document.querySelectorAll('.agent-option').forEach(option => {
+        option.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const model = option.getAttribute('data-model');
+            selectModel(model);
+            agentDropdown.classList.remove('active');
+        });
+    });
 
     userInput.addEventListener('keydown', (e) => {
         if (e.key === 'Enter' && !e.shiftKey) {
@@ -95,6 +127,37 @@ function setupEventListeners() {
     });
 }
 
+// Model selection functions
+function selectModel(model) {
+    currentModel = model;
+    saveModelPreference(model);
+    updateAgentDisplay(model);
+}
+
+function updateAgentDisplay(model) {
+    const options = document.querySelectorAll('.agent-option');
+    options.forEach(option => {
+        if (option.getAttribute('data-model') === model) {
+            option.classList.add('active');
+            if (agentName) {
+                agentName.textContent = option.querySelector('.agent-option-name').textContent;
+            }
+        } else {
+            option.classList.remove('active');
+        }
+    });
+}
+
+function saveModelPreference(model) {
+    localStorage.setItem('selectedModel', model);
+}
+
+function loadModelPreference() {
+    const savedModel = localStorage.getItem('selectedModel') || 'gemini';
+    currentModel = savedModel;
+    updateAgentDisplay(savedModel);
+}
+
 // Handle sending message
 async function handleSendMessage() {
     const message = userInput.value.trim();
@@ -130,76 +193,132 @@ async function handleSendMessage() {
     const typingIndicator = addTypingIndicator();
 
     try {
-        // Call Gemini API directly from browser
-        const apiUrl = `https://generativelanguage.googleapis.com/v1/models/${GEMINI_MODEL}:streamGenerateContent?key=${GEMINI_API_KEY}&alt=sse`;
-
-        const response = await fetch(apiUrl, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-                contents: conversationHistory,
-                generationConfig: {
-                    temperature: 0.7,
-                    maxOutputTokens: 4000,
-                }
-            })
-        });
-
-        if (!response.ok) {
-            throw new Error(`API error: ${response.status}`);
-        }
-
-        typingIndicator.remove();
-
-        const assistantMessage = createMessageElement('assistant', '');
-        chatContainer.appendChild(assistantMessage);
-
         let fullResponse = '';
-        const reader = response.body.getReader();
-        const decoder = new TextDecoder();
+        let assistantMessage;
 
-        while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
+        // Route to appropriate AI model
+        if (currentModel === 'groq') {
+            // Call Groq API
+            const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${GROQ_API_KEY}`,
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    model: GROQ_MODEL,
+                    messages: conversationHistory.map(msg => ({
+                        role: msg.role === 'model' ? 'assistant' : msg.role,
+                        content: msg.parts[0].text
+                    })),
+                    stream: true,
+                    temperature: 0.7,
+                    max_tokens: 4000
+                })
+            });
 
-            const chunk = decoder.decode(value);
-            const lines = chunk.split('\n').filter(line => line.trim() !== '');
+            if (!response.ok) {
+                throw new Error(`Groq API error: ${response.status}`);
+            }
 
-            for (const line of lines) {
-                try {
-                    let jsonStr = line;
+            typingIndicator.remove();
+            assistantMessage = createMessageElement('assistant', '');
+            chatContainer.appendChild(assistantMessage);
+
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder();
+
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+
+                const chunk = decoder.decode(value);
+                const lines = chunk.split('\n');
+
+                for (const line of lines) {
                     if (line.startsWith('data: ')) {
-                        jsonStr = line.substring(6);
+                        const data = line.slice(6);
+                        if (data === '[DONE]') continue;
+
+                        try {
+                            const parsed = JSON.parse(data);
+                            const content = parsed.choices?.[0]?.delta?.content;
+                            
+                            if (content) {
+                                fullResponse += content;
+                                updateMessageContent(assistantMessage, fullResponse);
+                            }
+                        } catch (e) {
+                            // Skip invalid JSON
+                        }
                     }
+                }
+            }
+        } else {
+            // Call Gemini API
+            const apiUrl = `https://generativelanguage.googleapis.com/v1/models/${GEMINI_MODEL}:streamGenerateContent?key=${GEMINI_API_KEY}&alt=sse`;
 
-                    jsonStr = jsonStr.replace(/^,/, '').trim();
-                    if (!jsonStr || jsonStr === '[' || jsonStr === ']') continue;
-
-                    const parsed = JSON.parse(jsonStr);
-                    const text = parsed.candidates?.[0]?.content?.parts?.[0]?.text;
-
-                    if (text) {
-                        fullResponse += text;
-                        updateMessageContent(assistantMessage, fullResponse);
+            const response = await fetch(apiUrl, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    contents: conversationHistory,
+                    generationConfig: {
+                        temperature: 0.7,
+                        maxOutputTokens: 4000,
                     }
-                } catch (e) {
-                    // Skip invalid JSON
+                })
+            });
+
+            if (!response.ok) {
+                throw new Error(`Gemini API error: ${response.status}`);
+            }
+
+            typingIndicator.remove();
+            assistantMessage = createMessageElement('assistant', '');
+            chatContainer.appendChild(assistantMessage);
+        
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder();
+
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+
+                const chunk = decoder.decode(value);
+                const lines = chunk.split('\n').filter(line => line.trim() !== '');
+
+                for (const line of lines) {
+                    try {
+                        let jsonStr = line;
+                        if (line.startsWith('data: ')) {
+                            jsonStr = line.substring(6);
+                        }
+
+                        jsonStr = jsonStr.replace(/^,/, '').trim();
+                        if (!jsonStr || jsonStr === '[' || jsonStr === ']') continue;
+
+                        const parsed = JSON.parse(jsonStr);
+                        const text = parsed.candidates?.[0]?.content?.parts?.[0]?.text;
+
+                        if (text) {
+                            fullResponse += text;
+                            updateMessageContent(assistantMessage, fullResponse);
+                        }
+                    } catch (e) {
+                        // Skip invalid JSON
+                    }
                 }
             }
         }
 
+        // Add assistant response to conversation history
         conversationHistory.push({
             role: 'model',
             parts: [{ text: fullResponse }]
         });
-
-        // Detect and add action buttons
-        const actions = detectActions(message, fullResponse);
-        if (actions.length > 0) {
-            addActionButtons(assistantMessage, actions);
-        }
 
         // Show remaining messages if not Pro
         if (!isProUser && messageCount < FREE_MESSAGE_LIMIT) {

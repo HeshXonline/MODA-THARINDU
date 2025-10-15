@@ -25,6 +25,32 @@
                         </svg>
                     </div>
                     <h1>Moda Tharindu AI</h1>
+                    
+                    <!-- Agent Selector -->
+                    <div class="agent-selector">
+                        <button class="agent-dropdown-btn" id="agentBtn">
+                            <span class="agent-name" id="agentName">Gemini 2.5 Flash</span>
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <polyline points="6 9 12 15 18 9"></polyline>
+                            </svg>
+                        </button>
+                        <div class="agent-dropdown" id="agentDropdown">
+                            <div class="agent-option" data-model="gemini">
+                                <div class="agent-option-content">
+                                    <div class="agent-option-name">Gemini 2.5 Flash</div>
+                                    <div class="agent-option-desc">Google's latest AI model</div>
+                                </div>
+                                <div class="agent-check">✓</div>
+                            </div>
+                            <div class="agent-option" data-model="groq">
+                                <div class="agent-option-content">
+                                    <div class="agent-option-name">Llama 3.3 70B</div>
+                                    <div class="agent-option-desc">Meta's most powerful model (Groq)</div>
+                                </div>
+                                <div class="agent-check">✓</div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
                 <div class="header-right">
                     <button class="btn-secondary" id="clearBtn" title="Clear conversation">

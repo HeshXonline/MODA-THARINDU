@@ -8,12 +8,22 @@ let conversationHistory = [];
 let isProcessing = false;
 let messageCount = 0; // Track number of messages sent
 let isProUser = false; // Pro status
+let currentImage = null; // Store current uploaded image
+let currentModel = 'gemini'; // Default model
 
 // DOM Elements
 const chatContainer = document.getElementById('chatContainer');
 const userInput = document.getElementById('userInput');
 const sendBtn = document.getElementById('sendBtn');
 const clearBtn = document.getElementById('clearBtn');
+const attachBtn = document.getElementById('attachBtn');
+const imageInput = document.getElementById('imageInput');
+const imagePreview = document.getElementById('imagePreview');
+const previewImg = document.getElementById('previewImg');
+const removeImageBtn = document.getElementById('removeImageBtn');
+const agentBtn = document.getElementById('agentBtn');
+const agentDropdown = document.getElementById('agentDropdown');
+const agentName = document.getElementById('agentName');
 
 // Configure marked options
 marked.setOptions({
@@ -33,6 +43,7 @@ marked.setOptions({
 document.addEventListener('DOMContentLoaded', () => {
     setupEventListeners();
     loadProStatus();
+    loadModelPreference();
     userInput.focus();
 });
 
@@ -40,6 +51,27 @@ document.addEventListener('DOMContentLoaded', () => {
 function setupEventListeners() {
     // Send button click
     sendBtn.addEventListener('click', handleSendMessage);
+
+    // Agent selector
+    agentBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        agentDropdown.classList.toggle('active');
+    });
+
+    // Close dropdown when clicking outside
+    document.addEventListener('click', () => {
+        agentDropdown.classList.remove('active');
+    });
+
+    // Agent option selection
+    document.querySelectorAll('.agent-option').forEach(option => {
+        option.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const model = option.getAttribute('data-model');
+            selectModel(model);
+            agentDropdown.classList.remove('active');
+        });
+    });
 
     // Enter key to send (Shift+Enter for new line)
     userInput.addEventListener('keydown', (e) => {
@@ -69,6 +101,19 @@ function setupEventListeners() {
             userInput.focus();
         });
     });
+
+    // Image upload event listeners
+    if (attachBtn) {
+        attachBtn.addEventListener('click', handleAttachClick);
+    }
+    
+    if (imageInput) {
+        imageInput.addEventListener('change', handleImageSelect);
+    }
+    
+    if (removeImageBtn) {
+        removeImageBtn.addEventListener('click', handleRemoveImage);
+    }
 
     // Pro modal event listeners
     const proModal = document.getElementById('proModal');
@@ -101,10 +146,41 @@ function setupEventListeners() {
     });
 }
 
+// Model selection functions
+function selectModel(model) {
+    currentModel = model;
+    saveModelPreference(model);
+    updateAgentDisplay(model);
+}
+
+function updateAgentDisplay(model) {
+    const options = document.querySelectorAll('.agent-option');
+    options.forEach(option => {
+        if (option.getAttribute('data-model') === model) {
+            option.classList.add('active');
+            agentName.textContent = option.querySelector('.agent-option-name').textContent;
+        } else {
+            option.classList.remove('active');
+        }
+    });
+}
+
+function saveModelPreference(model) {
+    localStorage.setItem('selectedModel', model);
+}
+
+function loadModelPreference() {
+    const savedModel = localStorage.getItem('selectedModel') || 'gemini';
+    currentModel = savedModel;
+    updateAgentDisplay(savedModel);
+}
+
 // Handle sending message
 async function handleSendMessage() {
     const message = userInput.value.trim();
-    if (!message || isProcessing) return;
+    const hasImage = currentImage !== null;
+    
+    if ((!message && !hasImage) || isProcessing) return;
 
     // Check if user exceeded free message limit and is not Pro
     if (messageCount >= FREE_MESSAGE_LIMIT && !isProUser) {
@@ -117,8 +193,14 @@ async function handleSendMessage() {
     messageCount++;
     saveMessageCount();
 
-    // Clear input
+    // Store image data before clearing
+    const imageData = currentImage ? { ...currentImage } : null;
+    
+    // Clear input and image
     userInput.value = '';
+    if (hasImage) {
+        handleRemoveImage();
+    }
     userInput.style.height = 'auto';
     sendBtn.disabled = true;
     isProcessing = true;
@@ -129,29 +211,41 @@ async function handleSendMessage() {
         welcomeMessage.remove();
     }
 
-    // Add user message to UI
-    addMessageToUI('user', message);
+    // Add user message to UI (with image if present)
+    addMessageToUI('user', message || '📷 Sent an image', imageData);
 
     // Add user message to conversation history
     conversationHistory.push({
         role: 'user',
-        content: message
+        content: message || 'Analyze this image'
     });
 
     // Show typing indicator
     const typingIndicator = addTypingIndicator();
 
     try {
+        // Prepare request body
+        const requestBody = {
+            messages: conversationHistory,
+            stream: true,
+            model: currentModel
+        };
+        
+        // Add image if present
+        if (imageData) {
+            requestBody.image = {
+                data: imageToBase64(imageData.data),
+                mimeType: imageData.mimeType
+            };
+        }
+        
         // Send request to API
         const response = await fetch(API_URL, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
             },
-            body: JSON.stringify({
-                messages: conversationHistory,
-                stream: true
-            })
+            body: JSON.stringify(requestBody)
         });
 
         if (!response.ok) {
@@ -206,12 +300,6 @@ async function handleSendMessage() {
             content: assistantResponse
         });
 
-        // Detect and add action buttons
-        const actions = detectActions(message, assistantResponse);
-        if (actions.length > 0) {
-            addActionButtons(assistantMessage, actions);
-        }
-
         // Show remaining messages if not Pro
         if (!isProUser && messageCount < FREE_MESSAGE_LIMIT) {
             const remaining = FREE_MESSAGE_LIMIT - messageCount;
@@ -241,8 +329,8 @@ async function handleSendMessage() {
 }
 
 // Add message to UI
-function addMessageToUI(role, content) {
-    const messageElement = createMessageElement(role, content);
+function addMessageToUI(role, content, imageData = null) {
+    const messageElement = createMessageElement(role, content, imageData);
     chatContainer.appendChild(messageElement);
     
     if (role === 'assistant') {
@@ -253,7 +341,7 @@ function addMessageToUI(role, content) {
 }
 
 // Create message element
-function createMessageElement(role, content) {
+function createMessageElement(role, content, imageData = null) {
     const messageDiv = document.createElement('div');
     messageDiv.className = `message ${role}`;
 
@@ -263,6 +351,16 @@ function createMessageElement(role, content) {
 
     const contentDiv = document.createElement('div');
     contentDiv.className = 'message-content';
+
+    // Add image if present (for user messages)
+    if (imageData && role === 'user') {
+        const img = document.createElement('img');
+        img.src = imageData.data;
+        img.className = 'message-image';
+        img.alt = 'Uploaded image';
+        img.onclick = () => window.open(imageData.data, '_blank');
+        contentDiv.appendChild(img);
+    }
 
     const textDiv = document.createElement('div');
     textDiv.className = 'message-text';
@@ -531,6 +629,71 @@ function showSuccessMessage(message) {
     }, 3000);
 }
 
+// ==================== IMAGE UPLOAD FUNCTIONS ====================
+
+// Handle attach button click
+function handleAttachClick() {
+    if (!isProUser) {
+        alert('📸 Image upload is a Pro feature!\n\nUpgrade to Pro to analyze images with AI.');
+        showProModal();
+        return;
+    }
+    imageInput.click();
+}
+
+// Handle image selection
+function handleImageSelect(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+    
+    // Validate file type
+    if (!file.type.startsWith('image/')) {
+        alert('Please select an image file (PNG, JPG, GIF, etc.)');
+        return;
+    }
+    
+    // Validate file size (max 5MB)
+    if (file.size > 5 * 1024 * 1024) {
+        alert('Image size must be less than 5MB');
+        return;
+    }
+    
+    // Read and display image
+    const reader = new FileReader();
+    reader.onload = function(event) {
+        currentImage = {
+            data: event.target.result,
+            mimeType: file.type,
+            name: file.name
+        };
+        
+        // Show preview
+        previewImg.src = event.target.result;
+        imagePreview.style.display = 'block';
+        
+        // Update send button state
+        sendBtn.disabled = false;
+    };
+    reader.readAsDataURL(file);
+}
+
+// Handle remove image
+function handleRemoveImage() {
+    currentImage = null;
+    imagePreview.style.display = 'none';
+    previewImg.src = '';
+    imageInput.value = '';
+    
+    // Update send button state
+    sendBtn.disabled = !userInput.value.trim();
+}
+
+// Convert image to base64 for API
+function imageToBase64(dataUrl) {
+    // Remove data URL prefix
+    return dataUrl.split(',')[1];
+}
+
 function showRemainingMessages(remaining) {
     const remainingDiv = document.createElement('div');
     remainingDiv.style.cssText = `
@@ -552,293 +715,4 @@ function showRemainingMessages(remaining) {
     setTimeout(() => {
         remainingDiv.remove();
     }, 3000);
-}
-
-// ==================== SMART ACTION DETECTION SYSTEM ====================
-
-// Action patterns for different categories
-const actionPatterns = {
-    shopping: {
-        keywords: ['buy', 'purchase', 'shop', 'shopping', 'price', 'cost', 'amazon', 'ebay', 'store', 'product'],
-        items: ['shoes', 'shirt', 'laptop', 'phone', 'book', 'clothes', 'furniture', 'electronics', 'gadget']
-    },
-    youtube: {
-        keywords: ['watch', 'video', 'youtube', 'tutorial', 'how to', 'song', 'music video', 'movie', 'show me'],
-        platforms: ['youtube']
-    },
-    spotify: {
-        keywords: ['listen', 'music', 'song', 'playlist', 'album', 'artist', 'spotify', 'play music'],
-        platforms: ['spotify']
-    },
-    weather: {
-        keywords: ['weather', 'temperature', 'forecast', 'rain', 'sunny', 'climate', 'hot', 'cold'],
-        locations: true
-    },
-    news: {
-        keywords: ['news', 'latest news', 'breaking news', 'headlines', 'current events', 'today news'],
-        topics: true
-    },
-    maps: {
-        keywords: ['map', 'location', 'directions', 'navigate', 'where is', 'how to get to', 'route'],
-        locations: true
-    },
-    search: {
-        keywords: ['search', 'google', 'find', 'look up', 'information about'],
-        general: true
-    }
-};
-
-// Detect actions from user message and AI response
-function detectActions(userMessage, aiResponse) {
-    const combinedText = (userMessage + ' ' + aiResponse).toLowerCase();
-    const actions = [];
-
-    // Shopping detection - Only add one primary shopping button
-    if (actionPatterns.shopping.keywords.some(kw => combinedText.includes(kw))) {
-        const item = extractShoppingItem(combinedText);
-        if (item) {
-            actions.push({
-                type: 'shopping',
-                label: `Shop for ${item}`,
-                url: `https://www.amazon.com/s?k=${encodeURIComponent(item)}`,
-                icon: '🛍️'
-            });
-        }
-    }
-
-    // YouTube detection
-    if (actionPatterns.youtube.keywords.some(kw => combinedText.includes(kw))) {
-        const query = extractVideoQuery(userMessage, combinedText);
-        if (query) {
-            actions.push({
-                type: 'youtube',
-                label: `Watch on YouTube`,
-                url: `https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`,
-                icon: '▶️'
-            });
-        }
-    }
-
-    // Spotify detection
-    if (actionPatterns.spotify.keywords.some(kw => combinedText.includes(kw))) {
-        const query = extractMusicQuery(userMessage, combinedText);
-        if (query) {
-            actions.push({
-                type: 'spotify',
-                label: `Listen on Spotify`,
-                url: `https://open.spotify.com/search/${encodeURIComponent(query)}`,
-                icon: '🎵'
-            });
-        }
-    }
-
-    // Weather detection
-    if (actionPatterns.weather.keywords.some(kw => combinedText.includes(kw))) {
-        const location = extractLocation(userMessage);
-        actions.push({
-            type: 'weather',
-            label: `Check Weather${location ? ': ' + location : ''}`,
-            url: location ? 
-                `https://www.google.com/search?q=weather+${encodeURIComponent(location)}` :
-                `https://www.google.com/search?q=weather`,
-            icon: '🌤️'
-        });
-    }
-
-    // News detection
-    if (actionPatterns.news.keywords.some(kw => combinedText.includes(kw))) {
-        const topic = extractNewsTopic(userMessage);
-        actions.push({
-            type: 'news',
-            label: `Read News${topic ? ': ' + topic : ''}`,
-            url: topic ? 
-                `https://news.google.com/search?q=${encodeURIComponent(topic)}` :
-                `https://news.google.com`,
-            icon: '📰'
-        });
-    }
-
-    // Maps detection
-    if (actionPatterns.maps.keywords.some(kw => combinedText.includes(kw))) {
-        const location = extractLocation(userMessage);
-        if (location) {
-            actions.push({
-                type: 'maps',
-                label: `View on Maps`,
-                url: `https://www.google.com/maps/search/${encodeURIComponent(location)}`,
-                icon: '🗺️'
-            });
-        }
-    }
-
-    // Only show search button if no other actions found
-    if (actions.length === 0 && actionPatterns.search.keywords.some(kw => combinedText.includes(kw))) {
-        const query = extractSearchQuery(userMessage);
-        if (query) {
-            actions.push({
-                type: 'search',
-                label: `Search Google`,
-                url: `https://www.google.com/search?q=${encodeURIComponent(query)}`,
-                icon: '🔍'
-            });
-        }
-    }
-
-    // Limit to maximum 2 action buttons for cleaner UI
-    return actions.slice(0, 2);
-}
-
-// Extract shopping item from text
-function extractShoppingItem(text) {
-    // Try to find specific item mentions
-    for (const item of actionPatterns.shopping.items) {
-        if (text.includes(item)) {
-            return item;
-        }
-    }
-    
-    // Extract from common patterns
-    const patterns = [
-        /(?:buy|purchase|shop for|looking for|need|want)\s+(?:a|an|some)?\s*([a-z\s]{2,30})/i,
-        /([a-z\s]{2,30})\s+(?:on amazon|on ebay|online)/i
-    ];
-    
-    for (const pattern of patterns) {
-        const match = text.match(pattern);
-        if (match && match[1]) {
-            return match[1].trim();
-        }
-    }
-    
-    return null;
-}
-
-// Extract video query
-function extractVideoQuery(originalMessage, text) {
-    const patterns = [
-        /(?:watch|show|find|search for)\s+(?:video|videos|tutorial)?\s*(?:about|on|for)?\s+(.+?)(?:\?|$)/i,
-        /(?:how to)\s+(.+?)(?:\?|$)/i,
-        /(.+?)\s+(?:video|tutorial|on youtube)/i
-    ];
-    
-    for (const pattern of patterns) {
-        const match = originalMessage.match(pattern);
-        if (match && match[1]) {
-            return match[1].trim();
-        }
-    }
-    
-    return null;
-}
-
-// Extract music query
-function extractMusicQuery(originalMessage, text) {
-    const patterns = [
-        /(?:listen to|play|find)\s+(?:song|music|album)?\s*(?:by|from)?\s+(.+?)(?:\?|$)/i,
-        /(?:song|music|album)\s+(.+?)(?:\?|$)/i,
-        /(.+?)\s+(?:on spotify|music)/i
-    ];
-    
-    for (const pattern of patterns) {
-        const match = originalMessage.match(pattern);
-        if (match && match[1]) {
-            return match[1].trim();
-        }
-    }
-    
-    return null;
-}
-
-// Extract location from text
-function extractLocation(text) {
-    const patterns = [
-        /(?:in|at|for|near)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)/,
-        /([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)\s+(?:weather|map|location)/i
-    ];
-    
-    for (const pattern of patterns) {
-        const match = text.match(pattern);
-        if (match && match[1]) {
-            return match[1].trim();
-        }
-    }
-    
-    return null;
-}
-
-// Extract news topic
-function extractNewsTopic(text) {
-    const patterns = [
-        /news\s+(?:about|on|regarding)\s+(.+?)(?:\?|$)/i,
-        /(.+?)\s+news/i
-    ];
-    
-    for (const pattern of patterns) {
-        const match = text.match(pattern);
-        if (match && match[1] && !match[1].match(/latest|breaking|today|current/i)) {
-            return match[1].trim();
-        }
-    }
-    
-    return null;
-}
-
-// Extract general search query
-function extractSearchQuery(text) {
-    const patterns = [
-        /(?:search for|google|find|look up)\s+(.+?)(?:\?|$)/i,
-        /(?:what is|who is|where is|when is|how is)\s+(.+?)(?:\?|$)/i
-    ];
-    
-    for (const pattern of patterns) {
-        const match = text.match(pattern);
-        if (match && match[1]) {
-            return match[1].trim();
-        }
-    }
-    
-    return text.trim();
-}
-
-// Add action buttons to message
-function addActionButtons(messageElement, actions) {
-    if (!actions || actions.length === 0) return;
-
-    // Find the content div inside the message
-    const contentDiv = messageElement.querySelector('.message-content');
-    if (!contentDiv) return;
-
-    const actionsContainer = document.createElement('div');
-    actionsContainer.className = 'action-buttons';
-    
-    // Add a subtle intro text
-    const introSpan = document.createElement('span');
-    introSpan.style.cssText = 'font-size: 12px; color: #9ca3af; margin-right: 8px;';
-    introSpan.textContent = '→';
-    actionsContainer.appendChild(introSpan);
-    
-    actions.forEach(action => {
-        const button = document.createElement('button');
-        button.className = 'action-btn';
-        button.innerHTML = `${action.icon} ${action.label}`;
-        button.onclick = () => {
-            window.open(action.url, '_blank');
-            showActionFeedback('✓ Opened');
-        };
-        actionsContainer.appendChild(button);
-    });
-    
-    contentDiv.appendChild(actionsContainer);
-}
-
-// Show action feedback
-function showActionFeedback(message) {
-    const feedback = document.createElement('div');
-    feedback.className = 'action-feedback';
-    feedback.textContent = message;
-    document.body.appendChild(feedback);
-    
-    setTimeout(() => {
-        feedback.remove();
-    }, 2000);
 }

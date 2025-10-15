@@ -72,6 +72,103 @@ body {
     color: var(--text-primary);
 }
 
+/* Agent Selector */
+.agent-selector {
+    position: relative;
+    margin-left: 1.5rem;
+}
+
+.agent-dropdown-btn {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+    padding: 0.5rem 1rem;
+    border-radius: 0.5rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+    border: 1px solid var(--border-color);
+    transition: all 0.2s ease;
+}
+
+.agent-dropdown-btn:hover {
+    background: var(--bg-primary);
+    border-color: var(--primary-color);
+}
+
+.agent-name {
+    color: var(--text-primary);
+}
+
+.agent-dropdown {
+    display: none;
+    position: absolute;
+    top: calc(100% + 0.5rem);
+    left: 0;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 0.75rem;
+    box-shadow: var(--shadow-lg);
+    min-width: 280px;
+    z-index: 100;
+    overflow: hidden;
+}
+
+.agent-dropdown.active {
+    display: block;
+}
+
+.agent-option {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.875rem 1rem;
+    cursor: pointer;
+    transition: background 0.2s ease;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.agent-option:last-child {
+    border-bottom: none;
+}
+
+.agent-option:hover {
+    background: var(--bg-tertiary);
+}
+
+.agent-option.active {
+    background: var(--bg-tertiary);
+}
+
+.agent-option-content {
+    flex: 1;
+}
+
+.agent-option-name {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 0.25rem;
+}
+
+.agent-option-desc {
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+}
+
+.agent-check {
+    color: var(--primary-color);
+    font-size: 1rem;
+    font-weight: bold;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+}
+
+.agent-option.active .agent-check {
+    opacity: 1;
+}
+
 /* Buttons */
 button {
     cursor: pointer;
@@ -418,6 +515,87 @@ button {
     cursor: not-allowed;
 }
 
+/* Image Upload Button */
+.btn-attach {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: transparent;
+    color: var(--text-secondary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    transition: all 0.2s ease;
+    margin-right: 8px;
+}
+
+.btn-attach:hover {
+    background: rgba(139, 92, 246, 0.1);
+    color: var(--primary-color);
+}
+
+/* Image Preview */
+.image-preview {
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.image-preview-container {
+    position: relative;
+    display: inline-block;
+    border-radius: 8px;
+    overflow: hidden;
+    border: 2px solid rgba(139, 92, 246, 0.3);
+}
+
+.image-preview-container img {
+    max-width: 200px;
+    max-height: 200px;
+    display: block;
+    object-fit: contain;
+    background: rgba(0, 0, 0, 0.05);
+}
+
+.image-remove-btn {
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background: rgba(0, 0, 0, 0.7);
+    color: white;
+    border: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+    line-height: 1;
+    transition: all 0.2s;
+}
+
+.image-remove-btn:hover {
+    background: rgba(239, 68, 68, 0.9);
+    transform: scale(1.1);
+}
+
+/* Message with image */
+.message-image {
+    max-width: 400px;
+    border-radius: 8px;
+    margin-bottom: 12px;
+    border: 1px solid rgba(139, 92, 246, 0.2);
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.message-image:hover {
+    transform: scale(1.02);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
 .input-footer {
     text-align: center;
     margin-top: 0.75rem;
@@ -612,72 +790,4 @@ button {
     background: var(--code-bg) !important;
     padding: 1rem !important;
     border-radius: 0.5rem;
-}
-
-/* ==================== ACTION BUTTONS ==================== */
-
-/* Action buttons container */
-.action-buttons {
-    display: inline-flex;
-    flex-wrap: wrap;
-    gap: 8px;
-    margin-top: 12px;
-    margin-left: 4px;
-}
-
-/* Individual action button */
-.action-btn {
-    background: rgba(139, 92, 246, 0.1);
-    color: #a78bfa;
-    border: 1px solid rgba(139, 92, 246, 0.3);
-    padding: 6px 12px;
-    border-radius: 6px;
-    font-size: 13px;
-    font-weight: 500;
-    cursor: pointer;
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    transition: all 0.2s ease;
-    text-decoration: none;
-}
-
-.action-btn:hover {
-    background: rgba(139, 92, 246, 0.2);
-    border-color: rgba(139, 92, 246, 0.5);
-    color: #c4b5fd;
-    transform: translateY(-1px);
-}
-
-.action-btn:active {
-    transform: translateY(0);
-}
-
-/* Action feedback notification */
-.action-feedback {
-    position: fixed;
-    top: 80px;
-    right: 20px;
-    background: rgba(139, 92, 246, 0.95);
-    color: white;
-    padding: 10px 16px;
-    border-radius: 6px;
-    font-size: 13px;
-    font-weight: 500;
-    z-index: 10000;
-    animation: slideInRight 0.3s ease-out, slideOutRight 0.3s ease-out 1.7s;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
-}
-
-/* Responsive action buttons */
-@media (max-width: 768px) {
-    .action-buttons {
-        display: flex;
-        flex-direction: column;
-        align-items: flex-start;
-    }
-    
-    .action-btn {
-        width: auto;
-    }
 }
